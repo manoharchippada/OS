@@ -7,7 +7,8 @@
 #include "param.h"
 #include "memlayout.h"
 #include "mmu.h"
-#include "spinlock.h"
+#include "spinlock.h" //manohar
+
 
 #define MAXPAGES (PHYSTOP / PGSIZE)
 
