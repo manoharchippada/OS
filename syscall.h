@@ -22,3 +22,5 @@
 #define SYS_close  21
 #define SYS_shutdown     22
 #define SYS_get_free_frame_cnt 23
+#define SYS_enable_cow 24
+#define SYS_get_cow_status 25

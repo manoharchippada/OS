@@ -9,18 +9,31 @@
 #include "mmu.h"
 #include "spinlock.h"
 
-void freerange(void *vstart, void *vend);
+#define MAXPAGES (PHYSTOP / PGSIZE)
+
+int cow_enabled = 0;
+
+
+void freerange(void* vstart, void* vend);
+
 extern char end[]; // first address after kernel loaded from ELF file
-                   // defined by the kernel linker script in kernel.ld
+// defined by the kernel linker script in kernel.ld
 
 struct run {
-  struct run *next;
+    struct run* next;
+    int ref;
 };
 
 struct {
-  struct spinlock lock;
-  int use_lock;
-  struct run *freelist;
+    struct spinlock lock;
+    int use_lock;
+    struct run* freelist;
+
+    // DEP: For COW fork, we can't store the run in the
+    //      physical page, because we need space for the ref
+    //      count.  Move to the kmem struct.
+    struct run runs[MAXPAGES];
+
 } kmem;
 
 int free_frame_cnt = 0; // xv6 proj - cow
@@ -31,72 +44,158 @@ int free_frame_cnt = 0; // xv6 proj - cow
 // 2. main() calls kinit2() with the rest of the physical pages
 // after installing a full page table that maps them on all cores.
 void
-kinit1(void *vstart, void *vend)
-{
-  initlock(&kmem.lock, "kmem");
-  kmem.use_lock = 0;
-  freerange(vstart, vend);
+kinit1(void* vstart, void* vend) {
+    initlock(&kmem.lock, "kmem");
+    kmem.use_lock = 0;
+    freerange(vstart, vend);
 }
 
 void
-kinit2(void *vstart, void *vend)
-{
-  freerange(vstart, vend);
-  kmem.use_lock = 1;
+kinit2(void* vstart, void* vend) {
+    freerange(vstart, vend);
+    kmem.use_lock = 1;
 }
 
+int get_cow_status = 0;
+
 void
-freerange(void *vstart, void *vend)
-{
-  char *p;
-  p = (char*)PGROUNDUP((uint)vstart);
-  for(; p + PGSIZE <= (char*)vend; p += PGSIZE)
-    kfree(p);
+freerange(void* vstart, void* vend) {
+    char* p;
+    p = (char*) PGROUNDUP((uint) vstart);
+    for (; p + PGSIZE <= (char*) vend; p += PGSIZE)
+        kfree(p);
 }
+
 //PAGEBREAK: 21
 // Free the page of physical memory pointed at by v,
 // which normally should have been returned by a
 // call to kalloc().  (The exception is when
 // initializing the allocator; see kinit above.)
 void
-kfree(char *v)
-{
-  struct run *r;
+kfree(char* v) {
+    struct run* r;
 
-  if((uint)v % PGSIZE || v < end || V2P(v) >= PHYSTOP)
-    panic("kfree");
+    if ((uint) v % PGSIZE || v < end || V2P(v) >= PHYSTOP)
+        panic("kfree");
 
-  // Fill with junk to catch dangling refs.
-  memset(v, 1, PGSIZE);
+    // Fill with junk to catch dangling refs.
+    memset(v, 1, PGSIZE);
 
-  if(kmem.use_lock)
-    acquire(&kmem.lock);
-  r = (struct run*)v;
-  r->next = kmem.freelist;
-  kmem.freelist = r;
-  free_frame_cnt++; // xv6 proj - cow
-  if(kmem.use_lock)
-    release(&kmem.lock);
+    if (kmem.use_lock)
+        acquire(&kmem.lock);
+//    if (cow_enabled == 0) {
+//        r = (struct run*) v;
+//        r->next = kmem.freelist;
+//        kmem.freelist = r;
+//        free_frame_cnt++; // xv6 proj - cow
+//    }else{
+        r = &kmem.runs[(V2P(v) / PGSIZE)];
+        r->next = kmem.freelist;
+        free_frame_cnt++; // xv6 proj - cow
+        r->ref = 0;
+        kmem.freelist = r;
+//    }
+    if (kmem.use_lock)
+        release(&kmem.lock);
 }
+
+
+//void
+//_kfree(char* v) {
+//    struct run* r;
+//
+//    if ((uint) v % PGSIZE || v < end || V2P(v) >= PHYSTOP)
+//        panic("kfree");
+//
+//    memset(v, 1, PGSIZE);
+//
+//    if (kmem.use_lock)
+//        acquire(&kmem.lock);
+//    r = &kmem.runs[(V2P(v) / PGSIZE)];
+//    r->next = kmem.freelist;
+//    r->ref = 0;
+//    kmem.freelist = r;
+//    if (kmem.use_lock)
+//        release(&kmem.lock);
+//}
 
 // Allocate one 4096-byte page of physical memory.
 // Returns a pointer that the kernel can use.
 // Returns 0 if the memory cannot be allocated.
 char*
-kalloc(void)
-{
-  struct run *r;
+kalloc(void) {
+    struct run* r;
+    char* rv;
 
-  if(kmem.use_lock)
-    acquire(&kmem.lock);
-  r = kmem.freelist;
-  if(r)
-  {
-    kmem.freelist = r->next;
-	free_frame_cnt--; // xv6 proj - cow
-  }
-  if(kmem.use_lock)
-    release(&kmem.lock);
-  return (char*)r;
+
+//    if (cow_enabled == 0) {
+//        if (kmem.use_lock) acquire(&kmem.lock);
+//        r = kmem.freelist;
+//        if (r) {
+//            kmem.freelist = r->next;
+//            free_frame_cnt--; // xv6 proj - cow
+//        }
+//        if (kmem.use_lock) release(&kmem.lock);
+//        return (char*) r;
+//    }else {
+        if (kmem.use_lock) acquire(&kmem.lock);
+        r = kmem.freelist;
+        if (r) {
+            kmem.freelist = r->next;
+            free_frame_cnt--; // xv6 proj - cow
+            r->ref = 1;
+        }
+        if (kmem.use_lock) release(&kmem.lock);
+        rv = r ? P2V((r - kmem.runs) * PGSIZE) : r;
+        return rv;
+//    }
+}
+
+//char*
+//kalloc_2(void) {
+//    struct run* r;
+//    char* rv;
+//
+//    if (kmem.use_lock) acquire(&kmem.lock);
+//    r = kmem.freelist;
+//    if (r) {
+//        kmem.freelist = r->next;
+//        r->ref = 1;
+//    }
+//    if (kmem.use_lock) release(&kmem.lock);
+//    rv = r ? P2V((r - kmem.runs) * PGSIZE) : r;
+//    return rv;
+//}
+
+void
+kinc(char* v) {
+    struct run* r;
+
+    if (kmem.use_lock)
+        acquire(&kmem.lock);
+    r = &kmem.runs[(V2P(v) / PGSIZE)];
+    r->ref += 1;
+    if (kmem.use_lock)
+        release(&kmem.lock);
+}
+
+void
+kdec(char* v) {
+    struct run* r;
+
+    if (kmem.use_lock)
+        acquire(&kmem.lock);
+    r = &kmem.runs[(V2P(v) / PGSIZE)];
+    r->ref -= 1;
+    if (kmem.use_lock)
+        release(&kmem.lock);
+}
+
+int
+getRefs(char* v) {
+    struct run* r;
+
+    r = &kmem.runs[(V2P(v) / PGSIZE)];
+    return r->ref;
 }
 
