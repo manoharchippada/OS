@@ -65,9 +65,14 @@ void            ioapicinit(void);
 
 // kalloc.c
 char*           kalloc(void);
+char*           kalloc_2(void);
 void            kfree(char*);
 void            kinit1(void*, void*);
 void            kinit2(void*, void*);
+void            _kfree(char*);
+void            kinc(char*);
+void            kdec(char*);
+int 			getRefs(char*);
 
 // kbd.c
 void            kbdintr(void);
@@ -185,6 +190,9 @@ void            switchuvm(struct proc*);
 void            switchkvm(void);
 int             copyout(pde_t*, uint, void*, uint);
 void            clearpteu(pde_t *pgdir, char *uva);
+
+pde_t*          copyuvm_2(pde_t*, uint);
+void 			pagefault();
 
 void flush_tlb_all(void); // xv6 proj - cow
 
