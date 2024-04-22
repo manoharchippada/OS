@@ -1,14 +1,14 @@
 #include "types.h"
 #include "user.h"
 
-/* ATTENTION: to ensure correct compilation of the base code, 
-   stub functions for the system call user space wrapper functions are provided. 
-   REMEMBER to disable the stub functions (by commenting the following macro) to 
-   allow your implementation to work properly. */
-#define STUB_FUNCS
-#ifdef STUB_FUNCS
-int enable_cow(int enable) {return enable;}
-#endif
+///* ATTENTION: to ensure correct compilation of the base code,
+//   stub functions for the system call user space wrapper functions are provided.
+//   REMEMBER to disable the stub functions (by commenting the following macro) to
+//   allow your implementation to work properly. */
+//#define STUB_FUNCS
+//#ifdef STUB_FUNCS
+//int enable_cow(int enable) {return enable;}
+//#endif
 
 int global_array[2048] = {0};
 int global_var = 0;
