@@ -105,6 +105,8 @@ extern int sys_write(void);
 extern int sys_uptime(void);
 extern int sys_shutdown(void);
 extern int sys_get_free_frame_cnt(void);
+extern int sys_enable_cow(void);
+extern int sys_get_cow_status(void);
 
 
 static int (*syscalls[])(void) = {
@@ -131,6 +133,8 @@ static int (*syscalls[])(void) = {
 [SYS_close]   sys_close,
 [SYS_shutdown]      sys_shutdown,
 [SYS_get_free_frame_cnt]  sys_get_free_frame_cnt,
+[SYS_enable_cow] sys_enable_cow,
+[SYS_get_cow_status] sys_get_cow_status
 
 };
 
