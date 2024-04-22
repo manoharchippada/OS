@@ -106,3 +106,18 @@ int sys_get_free_frame_cnt(void)
 {
     return free_frame_cnt;
 }
+
+extern int cow_enabled;
+int sys_enable_cow(void){
+
+    if (argint(0, &cow_enabled) < 0){// set cow_enabled arg. If failure return -1 error
+        cprintf("sys_enable_cow() failed!\n");
+        return -1;
+    }
+
+    return 0;
+}
+
+int sys_get_cow_status(void){
+    return cow_enabled;
+}
