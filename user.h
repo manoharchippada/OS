@@ -40,3 +40,6 @@ void* memset(void*, int, uint);
 void* malloc(uint);
 void free(void*);
 int atoi(const char*);
+
+int enable_cow(int enable);
+int get_cow_status(void);
